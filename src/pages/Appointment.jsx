@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback  } from 'react';
 import { db } from '../firebase.ts';
 import { ref, get, update } from 'firebase/database';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
+import QRCode from 'react-qr-code';
 
 const Appointment = () => {
   const [userData, setUserData] = useState(null);
@@ -10,6 +11,7 @@ const Appointment = () => {
   const [formData, setFormData] = useState({
     department: '',
     description: '',
+    email: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     time: format(new Date(), 'HH:mm')
   });
@@ -18,7 +20,9 @@ const Appointment = () => {
   
   const navigate = useNavigate();
   const location = useLocation();
-  const userId = location.state?.userId; // Passed from face recognition
+  const userId = location.state?.userId; 
+  const [appointmentId, setAppointmentId] = useState('');
+
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -69,7 +73,8 @@ const Appointment = () => {
     setIsSubmitting(true);
 
     try {
-      const appointmentId = `appt-${Date.now()}`;
+      const newAppointmentId = `appt-${Date.now()}`;
+      setAppointmentId(newAppointmentId);
       const appointmentData = {
         ...formData,
         createdAt: new Date().toISOString(),
@@ -77,7 +82,7 @@ const Appointment = () => {
       };
 
       const updates = {};
-      updates[`clients/${userId}/appointments/${appointmentId}`] = appointmentData;
+      updates[`clients/${userId}/appointments/${newAppointmentId}`] = appointmentData;
       updates[`clients/${userId}/lastUpdated`] = new Date().toISOString();
 
       await update(ref(db), updates);
@@ -97,6 +102,7 @@ const Appointment = () => {
       setFormData({
         department: '',
         description: '',
+        email: '',
         date: format(new Date(), 'yyyy-MM-dd'),
         time: format(new Date(), 'HH:mm')
       });
@@ -111,6 +117,15 @@ const Appointment = () => {
     }
   };
 
+  const handleNavigate = useCallback(() => {
+    navigate('/appointment-history', { 
+      state: { 
+        userId: userId,
+        userName: userData.name || 'User'
+      } 
+    });
+  }, [userData, navigate]);
+
   if (!userData) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -123,53 +138,34 @@ const Appointment = () => {
     <div className="container mx-auto p-4 max-w-4xl">
       <div className="bg-white rounded-lg shadow-md p-6">
         <h1 className="text-2xl font-bold mb-6">Welcome, {userData.name}</h1>
-        <button
-          onClick={() => navigate('/')}
-          className="bg-blue-500 hover:underline rounded-lg text-white px-4 py-2 mb-6"
-        >
-          Go to Home
-        </button>
+        <div className='space-x-2'>
+                  <button
+                  onClick={() => navigate('/')}
+                  className="bg-blue-500 hover:underline rounded-lg text-white px-4 py-2 mb-6 "
+                >
+                 Home
+                </button>
 
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Previous Visits Section */}
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Your Previous Visits</h2>
-            
-            {previousVisits.length > 0 ? (
-              <div className="space-y-4">
-                {previousVisits.map(visit => (
-                  <div key={visit.id} className="border border-gray-400 rounded-lg p-4 hover:bg-gray-50">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-medium">{visit.department || 'General Inquiry'}</h3>
-                        <p className="text-sm text-gray-600">
-                          {format(new Date(visit.date), 'MMM dd, yyyy')} at {visit.time}
-                        </p>
-                      </div>
-                      <span className={`px-2 py-1 text-xs rounded-full 
-                        ${visit.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          visit.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                          'bg-blue-100 text-blue-800'}`}
-                      >
-                        {visit.status}
-                      </span>
-                    </div>
-                    {visit.description && (
-                      <p className="mt-2 text-sm text-gray-700">
-                        {visit.description}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500">No previous visits found</p>
-            )}
-          </div>
+                <button
+                  onClick={handleNavigate}
+                  className="bg-blue-500 hover:underline rounded-lg text-white px-4 py-2 mb-6"
+                >
+                  Appointment History
+                </button>
+        </div>
 
-          {/* New Appointment Form */}
+        <div className="">
           <div>
             <h2 className="text-xl font-semibold mb-4">Schedule New Appointment</h2>
+
+            {appointmentId && (
+              <div className="my-4 text-center">
+                <p className="text-sm font-medium text-gray-700">Appointment ID: <span className="font-bold">{appointmentId}</span></p>
+                <div className="mt-2 inline-block p-2 bg-white rounded shadow">
+                  <QRCode value={appointmentId} size={128} />
+                </div>
+              </div>
+            )}
             
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -225,6 +221,19 @@ const Appointment = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter your Email"
+                ></input>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Description
                 </label>
                 <textarea
@@ -249,7 +258,7 @@ const Appointment = () => {
             </form>
 
             {status.message && (
-              <div className={`mt-4 p-3 rounded-lg text-center
+              <div className={`mt-4  p-3 rounded-lg text-center
                 ${status.type === 'error' ? 'bg-red-100 text-red-700' :
                   status.type === 'success' ? 'bg-green-100 text-green-700' :
                   'bg-blue-100 text-blue-700'}
