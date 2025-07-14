@@ -6,7 +6,7 @@ const sendAppointmentEmail = async ({ toEmail, toName, subject, htmlContent, qrB
     port: 587,
     auth: {
       user: 'service@cloudsyntex.com',
-      pass: '1wAF2wEMvElGmj6p'
+      pass: ''
     }
   });
 
